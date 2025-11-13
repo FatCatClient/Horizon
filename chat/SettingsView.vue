@@ -1298,15 +1298,11 @@
         this.horizonSaveDraftMessagesToDiskTimer
       );
 
-      if (
-        this.showPerCharacterFriends !=
-        core.state.settings.showPerCharacterFriends
-      ) {
-        await core.characters.refreshFriends(this.showPerCharacterFriends); //fetching is expensive, only do it when the config changes
-      }
+      const previousSettings = core.state.settings;
 
       core.state.settings = {
         playSound: this.playSound,
+        soundTheme: previousSettings.soundTheme,
         clickOpensMessage: this.clickOpensMessage,
         disallowedTags: this.disallowedTags
           .split(',')
@@ -1364,11 +1360,11 @@
           this.horizonMessagePortraitHighQuality,
         horizonShowCustomCharacterColors: this.horizonShowCustomCharacterColors,
         horizonShowDeveloperBadges: this.horizonShowDeveloperBadges,
-        horizonAutoGenderFilter: (core.state.settings as any)
+        horizonAutoGenderFilter: (previousSettings as any)
           .horizonAutoGenderFilter,
-        horizonSavedGenderFilters: (core.state.settings as any)
+        horizonSavedGenderFilters: (previousSettings as any)
           .horizonSavedGenderFilters,
-        horizonSavedMembersSort: (core.state.settings as any)
+        horizonSavedMembersSort: (previousSettings as any)
           .horizonSavedMembersSort,
         horizonPersistentMemberFilters: this.horizonPersistentMemberFilters,
         horizonShowGenderMarker: this.horizonShowGenderMarker,

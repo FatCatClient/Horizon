@@ -83,11 +83,22 @@ class State implements Interfaces.State {
     if (character.status === 'offline' && status !== 'offline') {
       if (character.isFriend) this.friends.push(character);
       if (character.isBookmarked) this.bookmarks.push(character);
+      if (this.characterFriendList.indexOf(character.name) !== -1) {
+        if (this.characterFriends.indexOf(character) === -1) {
+          this.characterFriends.push(character);
+        }
+      }
     } else if (status === 'offline' && character.status !== 'offline') {
       if (character.isFriend)
         this.friends.splice(this.friends.indexOf(character), 1);
       if (character.isBookmarked)
         this.bookmarks.splice(this.bookmarks.indexOf(character), 1);
+      if (this.characterFriendList.indexOf(character.name) !== -1) {
+        const index = this.characterFriends.indexOf(character);
+        if (index !== -1) {
+          this.characterFriends.splice(index, 1);
+        }
+      }
     }
     character.status = status;
     character.statusText = decodeHTML(text);
@@ -135,49 +146,6 @@ class State implements Interfaces.State {
 
     Vue.set(char.overrides, type, newValue);
   }
-  async refreshFriends(showPerCharacterFriends: boolean): Promise<void> {
-    // Always fetch global friends
-    this.friendList = (
-      await core.connection.queryApi<{
-        friends: { source: string; dest: string; last_online: number }[];
-      }>('friend-list.php')
-    ).friends.map(x => x.dest);
-
-    this.friends = [
-      ...new Set(
-        this.friendList
-          .map(x => state.get(x))
-          .filter(x => x.status !== 'offline')
-      )
-    ]; //deduplicate apparently this is performant
-
-    // If per-character friends is enabled, also fetch character-specific friends
-    if (showPerCharacterFriends) {
-      const id = this.ownProfile.character.id;
-      this.characterFriendList = (
-        await core.connection.queryApi<{
-          friends: Character[];
-        }>('character-friends.php', { id })
-      ).friends.map(x => x.name);
-
-      this.characterFriends = [
-        ...new Set(
-          this.characterFriendList
-            .map(x => state.get(x))
-            .filter(x => x.status !== 'offline')
-        )
-      ];
-    } else {
-      this.characterFriendList = [];
-      this.characterFriends = [];
-    }
-
-    for (const key in state.characters) {
-      const character = state.characters[key]!;
-      character.isFriend = state.friendList.indexOf(character.name) !== -1;
-    }
-  }
-
   async resolveOwnProfile(): Promise<void> {
     await methods.fieldsGet();
 
@@ -197,14 +165,20 @@ export default function (this: void, connection: Connection): Interfaces.State {
   connection.onEvent('connecting', async isReconnect => {
     state.friends = [];
     state.bookmarks = [];
+    state.characterFriends = [];
     state.bookmarkList = (
       await connection.queryApi<{ characters: string[] }>('bookmark-list.php')
     ).characters;
-    state.friendList = (
-      await connection.queryApi<{
-        friends: { source: string; dest: string; last_online: number }[];
-      }>('friend-list.php')
-    ).friends.map(x => x.dest);
+    const friendResponse = await connection.queryApi<{
+      friends: { source: string; dest: string; last_online: number }[];
+    }>('friend-list.php');
+    state.friendList = friendResponse.friends.map(x => x.dest);
+    const ownName = (state.ownCharacter as Character | undefined)?.name;
+    state.characterFriendList = ownName
+      ? friendResponse.friends
+          .filter(x => x.source === ownName)
+          .map(x => x.dest)
+      : [];
     if (isReconnect && <Character | undefined>state.ownCharacter !== undefined)
       reconnectStatus = {
         status: state.ownCharacter.status,
@@ -220,7 +194,6 @@ export default function (this: void, connection: Connection): Interfaces.State {
     }
   });
   connection.onEvent('connected', async isReconnect => {
-    state.refreshFriends(core.state.settings.showPerCharacterFriends);
     if (!isReconnect) return;
     connection.send('STA', reconnectStatus);
     for (const key in state.characters) {
@@ -268,6 +241,23 @@ export default function (this: void, connection: Connection): Interfaces.State {
     if (data.identity === connection.character) {
       state.ownCharacter = character;
 
+      const friendResponse = await connection.queryApi<{
+        friends: { source: string; dest: string; last_online: number }[];
+      }>('friend-list.php');
+      state.characterFriendList = friendResponse.friends
+        .filter(x => x.source === state.ownCharacter.name)
+        .map(x => x.dest);
+      for (const key in state.characters) {
+        const existing = state.characters[key]!;
+        if (
+          existing.status !== 'offline' &&
+          state.characterFriendList.indexOf(existing.name) !== -1 &&
+          state.characterFriends.indexOf(existing) === -1
+        ) {
+          state.characterFriends.push(existing);
+        }
+      }
+
       await state.resolveOwnProfile();
 
       // tslint:disable-next-line no-unnecessary-type-assertion
@@ -306,7 +296,7 @@ export default function (this: void, connection: Connection): Interfaces.State {
     )
       return;
     const character = state.get(data.name);
-    const id = state.ownProfile.character.id;
+    const ownName = (state.ownCharacter as Character | undefined)?.name;
     switch (data.type) {
       case 'trackadd':
         state.bookmarkList.push(data.name);
@@ -325,21 +315,25 @@ export default function (this: void, connection: Connection): Interfaces.State {
         character.isFriend = true;
         if (character.status !== 'offline') state.friends.push(character);
 
-        // If per-character friends is enabled, also update that list
-        if (core.state.settings.showPerCharacterFriends) {
-          state.characterFriendList = (
-            await connection.queryApi<{
-              friends: Character[];
-            }>('character-friends.php', { id })
-          ).friends.map(x => x.name);
+        // Always update character-specific friends list. This shouldn't add any excessive overhead.
+        const friendAddResponse = await connection.queryApi<{
+          friends: { source: string; dest: string; last_online: number }[];
+        }>('friend-list.php');
+        state.characterFriendList = ownName
+          ? friendAddResponse.friends
+              .filter(x => x.source === ownName)
+              .map(x => x.dest)
+          : [];
 
-          state.characterFriends = [
-            ...new Set(
-              state.characterFriendList
-                .map(x => state.get(x))
-                .filter(x => x.status !== 'offline')
-            )
-          ];
+        // If this character is now a friend of our character and is online, add to characterFriends.
+        // TODO: We may want to alter this in the future for the 'all' list. For now, it's fine.
+        if (
+          ownName &&
+          state.characterFriendList.indexOf(character.name) !== -1 &&
+          character.status !== 'offline' &&
+          state.characterFriends.indexOf(character) === -1
+        ) {
+          state.characterFriends.push(character);
         }
         break;
       case 'friendremove':
@@ -350,21 +344,26 @@ export default function (this: void, connection: Connection): Interfaces.State {
           state.friends.splice(state.friends.indexOf(character), 1);
         }
 
-        // If per-character friends is enabled, also update that list
-        if (core.state.settings.showPerCharacterFriends) {
-          state.characterFriendList = (
-            await connection.queryApi<{
-              friends: Character[];
-            }>('character-friends.php', { id })
-          ).friends.map(x => x.name);
+        // Once again, update character-specific friends list, regardless of setting
+        const friendRemoveResponse = await connection.queryApi<{
+          friends: { source: string; dest: string; last_online: number }[];
+        }>('friend-list.php');
+        state.characterFriendList = ownName
+          ? friendRemoveResponse.friends
+              .filter(x => x.source === ownName)
+              .map(x => x.dest)
+          : [];
 
-          state.characterFriends = [
-            ...new Set(
-              state.characterFriendList
-                .map(x => state.get(x))
-                .filter(x => x.status !== 'offline')
-            )
-          ];
+        // If this character is no longer a friend of our character, remove from characterFriends
+        if (
+          ownName &&
+          state.characterFriendList.indexOf(character.name) === -1 &&
+          character.status !== 'offline'
+        ) {
+          const index = state.characterFriends.indexOf(character);
+          if (index !== -1) {
+            state.characterFriends.splice(index, 1);
+          }
         }
     }
   });

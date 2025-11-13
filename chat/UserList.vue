@@ -436,9 +436,11 @@
 
       // If per-character friends are shown, filter them out to avoid duplicates
       if (this.showPerCharacterFriends) {
-        const characterFriendNames = core.characters.characterFriendList;
+        const characterFriendNames = new Set(
+          core.characters.characterFriendList.map(name => name.toLowerCase())
+        );
         friendsList = friendsList.filter(
-          f => characterFriendNames.indexOf(f.name) === -1
+          f => !characterFriendNames.has(f.name.toLowerCase())
         );
 
         // If hideNonCharacterFriends is enabled, hide ALL remaining global friends
@@ -451,10 +453,23 @@
     }
 
     get bookmarks(): Character[] {
-      return core.characters.bookmarks
+      const friendNames = new Set(
+        core.characters.friends.map(friend => friend.name.toLowerCase())
+      );
+      let bookmarks = core.characters.bookmarks
         .slice()
-        .filter(x => core.characters.friends.indexOf(x) === -1)
-        .sort(this.sorter);
+        .filter(x => !friendNames.has(x.name.toLowerCase()));
+
+      if (this.showPerCharacterFriends) {
+        const characterFriendNames = new Set(
+          core.characters.characterFriendList.map(name => name.toLowerCase())
+        );
+        bookmarks = bookmarks.filter(
+          x => !characterFriendNames.has(x.name.toLowerCase())
+        );
+      }
+
+      return bookmarks.sort(this.sorter);
     }
 
     get channel(): Channel {

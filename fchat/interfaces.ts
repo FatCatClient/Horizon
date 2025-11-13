@@ -326,7 +326,6 @@ export namespace Character {
 
     get(name: string): Character;
     setOverride(name: string, type: keyof CharacterOverrides, value: any): void;
-    refreshFriends(showPerCharacterFriends: boolean): Promise<void>;
   }
 
   /**
