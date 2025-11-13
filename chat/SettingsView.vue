@@ -531,6 +531,34 @@
           </label>
         </div>
       </div>
+      <div class="mb-3">
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="showPerCharacterFriends"
+            v-model="showPerCharacterFriends"
+          />
+          <label class="form-check-label" for="showPerCharacterFriends">
+            {{ l('settings.showPerCharacterFriends') }}
+          </label>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="hideNonCharacterFriends"
+            v-model="hideNonCharacterFriends"
+            :disabled="!showPerCharacterFriends"
+          />
+          <label class="form-check-label" for="hideNonCharacterFriends">
+            {{ l('settings.hideNonCharacterFriends') }}
+          </label>
+        </div>
+      </div>
 
       <div class="mb-3">
         <div class="form-check">
@@ -1099,6 +1127,8 @@
     showNeedsReply!: boolean;
     enterSend!: boolean;
     colorBookmarks!: boolean;
+    showPerCharacterFriends!: boolean;
+    hideNonCharacterFriends!: boolean;
     bbCodeBar!: boolean;
 
     risingAdScore!: boolean;
@@ -1163,6 +1193,8 @@
       this.showNeedsReply = settings.showNeedsReply;
       this.enterSend = settings.enterSend;
       this.colorBookmarks = settings.colorBookmarks;
+      this.showPerCharacterFriends = settings.showPerCharacterFriends;
+      this.hideNonCharacterFriends = settings.hideNonCharacterFriends;
       this.bbCodeBar = settings.bbCodeBar;
       this.availableImports = (
         await core.settingsStore.getAvailableCharacters()
@@ -1266,6 +1298,13 @@
         this.horizonSaveDraftMessagesToDiskTimer
       );
 
+      if (
+        this.showPerCharacterFriends !=
+        core.state.settings.showPerCharacterFriends
+      ) {
+        await core.characters.refreshFriends(this.showPerCharacterFriends); //fetching is expensive, only do it when the config changes
+      }
+
       core.state.settings = {
         playSound: this.playSound,
         clickOpensMessage: this.clickOpensMessage,
@@ -1305,6 +1344,8 @@
         showNeedsReply: this.showNeedsReply,
         enterSend: this.enterSend,
         colorBookmarks: this.colorBookmarks,
+        showPerCharacterFriends: this.showPerCharacterFriends,
+        hideNonCharacterFriends: this.hideNonCharacterFriends,
         bbCodeBar: this.bbCodeBar,
 
         risingAdScore: this.risingAdScore,
@@ -1370,7 +1411,6 @@
             ? this.risingCharacterTheme
             : undefined
       };
-
       console.log('SETTINGS', minAge, maxAge, core.state.settings);
 
       const newRisingFilter = JSON.parse(

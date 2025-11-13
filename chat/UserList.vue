@@ -23,10 +23,13 @@
       style="padding-left: 10px"
       v-if="tab === '0'"
     >
-      <h4>{{ l('users.friends') }}</h4>
+      <h4 v-if="showPerCharacterFriends && characterFriends.length > 0">
+        {{ l('users.characterFriends') }}
+      </h4>
       <div
-        v-for="character in friends"
-        :key="character.name"
+        v-if="showPerCharacterFriends"
+        v-for="character in characterFriends"
+        :key="'char-' + character.name"
         class="userlist-item"
       >
         <user
@@ -36,10 +39,23 @@
           :isMarkerShown="shouldShowMarker"
         ></user>
       </div>
-      <h4>{{ l('users.bookmarks') }}</h4>
+      <h4 v-if="friends.length > 0">{{ l('users.friends') }}</h4>
+      <div
+        v-for="character in friends"
+        :key="'friend-' + character.name"
+        class="userlist-item"
+      >
+        <user
+          :character="character"
+          :showStatus="true"
+          :bookmark="false"
+          :isMarkerShown="shouldShowMarker"
+        ></user>
+      </div>
+      <h4 v-if="bookmarks.length > 0">{{ l('users.bookmarks') }}</h4>
       <div
         v-for="character in bookmarks"
-        :key="character.name"
+        :key="'bookmark-' + character.name"
         class="userlist-item"
       >
         <user
@@ -404,8 +420,34 @@
       }
     }
 
+    get showPerCharacterFriends(): boolean {
+      return core.state.settings.showPerCharacterFriends;
+    }
+
+    get characterFriends(): Character[] {
+      if (!this.showPerCharacterFriends) {
+        return [];
+      }
+      return core.characters.characterFriends.slice().sort(this.sorter);
+    }
+
     get friends(): Character[] {
-      return core.characters.friends.slice().sort(this.sorter);
+      let friendsList = core.characters.friends.slice();
+
+      // If per-character friends are shown, filter them out to avoid duplicates
+      if (this.showPerCharacterFriends) {
+        const characterFriendNames = core.characters.characterFriendList;
+        friendsList = friendsList.filter(
+          f => characterFriendNames.indexOf(f.name) === -1
+        );
+
+        // If hideNonCharacterFriends is enabled, hide ALL remaining global friends
+        if (core.state.settings.hideNonCharacterFriends) {
+          return [];
+        }
+      }
+
+      return friendsList.sort(this.sorter);
     }
 
     get bookmarks(): Character[] {

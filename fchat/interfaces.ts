@@ -314,16 +314,19 @@ export namespace Character {
   export interface State {
     readonly ownCharacter: Character;
     readonly friends: ReadonlyArray<Character>;
+    readonly characterFriends: ReadonlyArray<Character>;
     readonly bookmarks: ReadonlyArray<Character>;
     readonly ignoreList: ReadonlyArray<string>;
     readonly opList: ReadonlyArray<string>;
     readonly friendList: ReadonlyArray<string>;
+    readonly characterFriendList: ReadonlyArray<string>;
     readonly bookmarkList: ReadonlyArray<string>;
 
     readonly ownProfile: CharacterProfile;
 
     get(name: string): Character;
     setOverride(name: string, type: keyof CharacterOverrides, value: any): void;
+    refreshFriends(showPerCharacterFriends: boolean): Promise<void>;
   }
 
   /**
